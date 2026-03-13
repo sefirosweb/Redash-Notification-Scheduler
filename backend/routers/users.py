@@ -13,13 +13,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class UserCreate(BaseModel):
     username: str
     password: str
-    is_admin: bool = False
 
 class UserOut(BaseModel):
     id: int
     username: str
     is_active: bool
-    is_admin: bool
 
     class Config:
         from_attributes = True
@@ -27,14 +25,13 @@ class UserOut(BaseModel):
 class UserUpdate(BaseModel):
     password: str = None
     is_active: bool = None
-    is_admin: bool = None
 
 @router.post("/", response_model=UserOut)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
     password_hash = pwd_context.hash(user.password)
-    db_user = User(username=user.username, password_hash=password_hash, is_admin=user.is_admin)
+    db_user = User(username=user.username, password_hash=password_hash)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -60,8 +57,6 @@ def update_user(user_id: int, user: UserUpdate, db: Session = Depends(get_db)):
         db_user.password_hash = pwd_context.hash(user.password)
     if user.is_active is not None:
         db_user.is_active = user.is_active
-    if user.is_admin is not None:
-        db_user.is_admin = user.is_admin
     db.commit()
     db.refresh(db_user)
     return db_user

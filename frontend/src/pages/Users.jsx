@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import client from '../api/client'
@@ -9,7 +10,41 @@ import { Badge } from '../components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table'
 
-const EMPTY = { username: '', password: '', is_admin: false }
+const EMPTY = { username: '', password: '' }
+
+function ConfirmDialog({ user, onConfirm, onCancel }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-slate-900">Eliminar usuario</h2>
+        <p className="text-sm text-slate-600">
+          ¿Seguro que quieres eliminar el usuario <span className="font-semibold text-slate-900">"{user.username}"</span>?
+          Esta acción no se puede deshacer.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onCancel}
+            className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+            Cancelar
+          </button>
+          <button onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+function getCurrentUsername() {
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload.sub
+  } catch { return null }
+}
 
 export default function Users() {
   const [users, setUsers] = useState([])
@@ -19,6 +54,8 @@ export default function Users() {
   const [createForm, setCreateForm] = useState(EMPTY)
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [confirmUser, setConfirmUser] = useState(null)
+  const currentUsername = getCurrentUsername()
 
   function loadUsers() {
     setLoading(true)
@@ -44,7 +81,12 @@ export default function Users() {
   }
 
   function handleDelete(user) {
-    if (!confirm(`¿Eliminar usuario "${user.username}"?`)) return
+    setConfirmUser(user)
+  }
+
+  function confirmDelete() {
+    const user = confirmUser
+    setConfirmUser(null)
     client.delete(`/users/${user.id}`)
       .then(() => { loadUsers(); toast.success(`Usuario "${user.username}" eliminado`) })
       .catch(err => toast.error(err.response?.data?.detail || err.message))
@@ -52,11 +94,18 @@ export default function Users() {
 
   function openEdit(user) {
     setEditingId(user.id)
-    setEditForm({ password: '', is_active: user.is_active, is_admin: user.is_admin })
+    setEditForm({ password: '', is_active: user.is_active })
   }
 
   return (
     <div className="space-y-6">
+      {confirmUser && (
+        <ConfirmDialog
+          user={confirmUser}
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmUser(null)}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
@@ -84,12 +133,6 @@ export default function Users() {
                   onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))}
                   required placeholder="••••••••" />
               </div>
-              <div className="flex items-center gap-2 sm:col-span-2">
-                <input type="checkbox" id="iadmin" checked={createForm.is_admin}
-                  onChange={e => setCreateForm(f => ({ ...f, is_admin: e.target.checked }))}
-                  className="w-4 h-4 accent-violet-600" />
-                <Label htmlFor="iadmin">Administrador</Label>
-              </div>
               <div className="sm:col-span-2 flex gap-2 border-t border-slate-100 pt-2">
                 <Button type="submit">Crear</Button>
                 <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancelar</Button>
@@ -110,7 +153,6 @@ export default function Users() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Usuario</TableHead>
-                  <TableHead>Rol</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -120,11 +162,6 @@ export default function Users() {
                   <>
                     <TableRow key={user.id}>
                       <TableCell className="font-medium text-slate-900">{user.username}</TableCell>
-                      <TableCell>
-                        <Badge variant={user.is_admin ? 'default' : 'secondary'}>
-                          {user.is_admin ? 'Admin' : 'Usuario'}
-                        </Badge>
-                      </TableCell>
                       <TableCell>
                         <Badge variant={user.is_active ? 'success' : 'outline'}>
                           {user.is_active ? 'Activo' : 'Inactivo'}
@@ -136,7 +173,12 @@ export default function Users() {
                             onClick={() => editingId === user.id ? setEditingId(null) : openEdit(user)}>
                             {editingId === user.id ? 'Cancelar' : 'Editar'}
                           </Button>
-                          <Button variant="destructive" size="sm" onClick={() => handleDelete(user)}>
+                          <Button
+                            variant="destructive" size="sm"
+                            onClick={() => handleDelete(user)}
+                            disabled={user.username === currentUsername}
+                            title={user.username === currentUsername ? 'No puedes eliminarte a ti mismo' : undefined}
+                          >
                             Eliminar
                           </Button>
                         </div>
@@ -145,7 +187,7 @@ export default function Users() {
 
                     {editingId === user.id && (
                       <TableRow key={`${user.id}-edit`} className="bg-slate-50">
-                        <TableCell colSpan={4} className="py-3">
+                        <TableCell colSpan={3} className="py-3">
                           <form onSubmit={e => handleUpdate(e, user.id)}
                                 className="flex flex-wrap items-end gap-3">
                             <div className="space-y-1">
@@ -155,12 +197,6 @@ export default function Users() {
                                 onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))}
                                 className="h-8 text-xs w-56" />
                             </div>
-                            <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                              <input type="checkbox" checked={editForm.is_admin}
-                                onChange={e => setEditForm(f => ({ ...f, is_admin: e.target.checked }))}
-                                className="accent-violet-600" />
-                              Admin
-                            </label>
                             <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                               <input type="checkbox" checked={editForm.is_active}
                                 onChange={e => setEditForm(f => ({ ...f, is_active: e.target.checked }))}

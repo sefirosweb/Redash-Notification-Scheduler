@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
-from models.job import Group
+from models.job import Group, Job
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -55,6 +55,13 @@ def delete_group(group_id: int, db: Session = Depends(get_db)):
 	db_group = db.query(Group).filter(Group.id == group_id).first()
 	if not db_group:
 		raise HTTPException(status_code=404, detail="Group not found")
+	jobs = db.query(Job).filter(Job.group_id == group_id).all()
+	if jobs:
+		names = ", ".join(f'"{j.name}"' for j in jobs)
+		raise HTTPException(
+			status_code=409,
+			detail={"message": "El grupo está siendo usado por los siguientes jobs", "jobs": [j.name for j in jobs]}
+		)
 	db.delete(db_group)
 	db.commit()
 	return {"ok": True}

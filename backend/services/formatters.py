@@ -1,8 +1,16 @@
-from typing import List, Dict
+from typing import List, Dict, Any
 from io import BytesIO
 from jinja2 import Template
 import openpyxl
 from openpyxl.styles import Font
+
+
+def _cell_value(v: Any) -> Any:
+    """Convert non-primitive values (dicts, lists) to their string representation."""
+    if isinstance(v, (dict, list)):
+        import json
+        return json.dumps(v, ensure_ascii=False)
+    return v
 
 
 def rows_to_html(rows: List[Dict], columns: List[Dict], total_row: Dict = None) -> str:
@@ -33,7 +41,9 @@ def rows_to_html(rows: List[Dict], columns: List[Dict], total_row: Dict = None) 
         </tbody>
     </table>
     ''')
-    return table_template.render(rows=rows, columns=columns, total_row=total_row)
+    clean_rows = [{col['name']: _cell_value(row.get(col['name'])) for col in columns} for row in rows]
+    clean_total = {col['name']: _cell_value(total_row.get(col['name'])) for col in columns} if total_row else None
+    return table_template.render(rows=clean_rows, columns=columns, total_row=clean_total)
 
 
 def rows_to_pdf(rows: List[Dict], columns: List[Dict], total_row: Dict = None) -> bytes:
@@ -47,9 +57,9 @@ def rows_to_pdf(rows: List[Dict], columns: List[Dict], total_row: Dict = None) -
     headers = [col['name'] for col in columns]
     data = [headers]
     for row in rows:
-        data.append([str(row.get(col['name'], '')) for col in columns])
+        data.append([str(_cell_value(row.get(col['name'], ''))) for col in columns])
     if total_row:
-        data.append([str(total_row.get(col['name'], '')) for col in columns])
+        data.append([str(_cell_value(total_row.get(col['name'], ''))) for col in columns])
 
     col_count = len(headers)
     col_width = (landscape(A4)[0] - 40) / col_count if col_count else 100
@@ -83,11 +93,11 @@ def rows_to_excel(rows: List[Dict], columns: List[Dict], total_row: Dict = None)
         cell.font = Font(bold=True, color="6C3483")
     for r_idx, row in enumerate(rows, 2):
         for c_idx, col in enumerate(columns, 1):
-            ws.cell(row=r_idx, column=c_idx, value=row.get(col['name'], ""))
+            ws.cell(row=r_idx, column=c_idx, value=_cell_value(row.get(col['name'], "")))
     if total_row:
         t_idx = len(rows) + 2
         for c_idx, col in enumerate(columns, 1):
-            cell = ws.cell(row=t_idx, column=c_idx, value=total_row.get(col['name'], ""))
+            cell = ws.cell(row=t_idx, column=c_idx, value=_cell_value(total_row.get(col['name'], "")))
             cell.font = Font(bold=True)
     output = BytesIO()
     wb.save(output)

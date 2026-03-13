@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import cronstrue from 'cronstrue'
@@ -8,6 +9,31 @@ import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Card, CardContent } from '../components/ui/card'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table'
+
+function ConfirmDialog({ job, onConfirm, onCancel }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-slate-900">Eliminar job</h2>
+        <p className="text-sm text-slate-600">
+          ¿Seguro que quieres eliminar el job <span className="font-semibold text-slate-900">"{job.name}"</span>?
+          Esta acción no se puede deshacer.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onCancel}
+            className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+            Cancelar
+          </button>
+          <button onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
 
 function cronLabel(expr) {
   try { return cronstrue.toString(expr, { locale: 'es' }) }
@@ -20,6 +46,7 @@ export default function Jobs() {
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [confirmJob, setConfirmJob] = useState(null)
 
   function loadJobs() {
     setLoading(true)
@@ -36,7 +63,12 @@ export default function Jobs() {
        .catch(err => toast.error(err.response?.data?.detail || err.message))
   }
   function handleDelete(job) {
-    if (!confirm(`¿Eliminar "${job.name}"?`)) return
+    setConfirmJob(job)
+  }
+
+  function confirmDelete() {
+    const job = confirmJob
+    setConfirmJob(null)
     client.delete(`/jobs/${job.id}`)
       .then(() => { loadJobs(); toast.success(`Job "${job.name}" eliminado`) })
       .catch(err => toast.error(err.response?.data?.detail || err.message))
@@ -49,6 +81,13 @@ export default function Jobs() {
 
   return (
     <div className="space-y-6">
+      {confirmJob && (
+        <ConfirmDialog
+          job={confirmJob}
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmJob(null)}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Jobs programados</h1>

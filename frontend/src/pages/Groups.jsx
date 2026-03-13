@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import client from '../api/client'
@@ -10,6 +11,35 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 
 const EMPTY = { name: '', emails: '' }
 
+function ConfirmDialog({ group, onConfirm, onCancel }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-slate-900">Eliminar grupo</h2>
+        <p className="text-sm text-slate-600">
+          ¿Seguro que quieres eliminar el grupo <span className="font-semibold text-slate-900">"{group.name}"</span>?
+          Esta acción no se puede deshacer.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+          >
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 export default function Groups() {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
@@ -17,6 +47,7 @@ export default function Groups() {
   const [editing, setEditing] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY)
+  const [confirmGroup, setConfirmGroup] = useState(null)
 
   function loadGroups() {
     setLoading(true)
@@ -37,14 +68,33 @@ export default function Groups() {
        .catch(err => toast.error(err.response?.data?.detail || err.message))
   }
   function handleDelete(g) {
-    if (!confirm(`¿Eliminar grupo "${g.name}"?`)) return
+    setConfirmGroup(g)
+  }
+
+  function confirmDelete() {
+    const g = confirmGroup
+    setConfirmGroup(null)
     client.delete(`/groups/${g.id}`)
       .then(() => { loadGroups(); toast.success(`Grupo "${g.name}" eliminado`) })
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => {
+        const detail = err.response?.data?.detail
+        if (detail?.jobs) {
+          toast.error(`No se puede eliminar: usado por ${detail.jobs.map(j => `"${j}"`).join(', ')}`)
+        } else {
+          toast.error(typeof detail === 'string' ? detail : err.message)
+        }
+      })
   }
 
   return (
     <div className="space-y-6">
+      {confirmGroup && (
+        <ConfirmDialog
+          group={confirmGroup}
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmGroup(null)}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Grupos de destinatarios</h1>

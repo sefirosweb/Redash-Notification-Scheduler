@@ -101,6 +101,119 @@ function QueryPicker({ value, onChange }) {
   )
 }
 
+/**
+ * Searchable dropdown.
+ * options: array of strings OR { label, value } objects.
+ * value: the currently selected value (string or id).
+ */
+function SearchableSelect({ value, onChange, options, loading, placeholder = 'Selecciona...' }) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Normalise each option to { label, value }
+  const normalised = options.map(o =>
+    typeof o === 'object' && o !== null ? o : { label: String(o), value: String(o) }
+  )
+
+  const filtered = normalised.filter(o =>
+    o.label.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const selectedLabel = normalised.find(o => String(o.value) === String(value))?.label
+
+  function select(opt) {
+    onChange(opt.value)
+    setOpen(false)
+    setSearch('')
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        disabled={loading}
+        className="w-full flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+      >
+        <span className={selectedLabel ? 'text-slate-900' : 'text-slate-400'}>
+          {loading ? 'Cargando opciones...' : (selectedLabel || placeholder)}
+        </span>
+        <span className="text-slate-400">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg">
+          <div className="p-2 border-b border-slate-100">
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar..."
+              className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+          <ul className="max-h-56 overflow-auto py-1">
+            {filtered.length === 0 && <li className="px-3 py-2 text-xs text-slate-400">Sin resultados</li>}
+            {value !== '' && value !== null && value !== undefined && (
+              <li
+                onClick={() => { onChange(''); setOpen(false); setSearch('') }}
+                className="px-3 py-2 text-xs text-slate-400 cursor-pointer hover:bg-slate-50 italic"
+              >
+                — Limpiar selección —
+              </li>
+            )}
+            {filtered.map(o => (
+              <li key={o.value}
+                onClick={() => select(o)}
+                className={`px-3 py-2 text-sm cursor-pointer hover:bg-violet-50 hover:text-violet-700 ${String(o.value) === String(value) ? 'bg-violet-50 text-violet-700 font-medium' : ''}`}
+              >
+                {o.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QueryDropdownField({ param, cfg, update }) {
+  const [options, setOptions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!param.queryId) { setLoading(false); return }
+    client.get(`/redash/queries/${param.queryId}/results`)
+      .then(res => {
+        const rows = res.data || []
+        setOptions(rows.map(row => Object.values(row)[0]).filter(v => v != null).map(String))
+      })
+      .catch(() => setOptions([]))
+      .finally(() => setLoading(false))
+  }, [param.queryId])
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{param.title || param.name}</Label>
+      <SearchableSelect
+        value={cfg.value}
+        onChange={v => update({ value: v, is_preset: false })}
+        options={options}
+        loading={loading}
+      />
+    </div>
+  )
+}
+
 function ParamField({ param, value, onChange }) {
   const { name, title, type, enumOptions } = param
   const cfg = value || { type, value: '', is_preset: false }
@@ -109,39 +222,69 @@ function ParamField({ param, value, onChange }) {
     onChange(name, { ...cfg, type, ...patch })
   }
 
+  if (type === 'query') {
+    return <QueryDropdownField param={param} cfg={cfg} update={update} />
+  }
+
   const isDateType = type === 'date' || type === 'datetime-local'
   const isRangeType = type === 'date-range' || type === 'datetime-range'
 
   if (isDateType || isRangeType) {
+    const inputType = (type === 'datetime-local' || type === 'datetime-range') ? 'datetime-local' : 'date'
     return (
       <div className="space-y-1.5">
         <Label>{title || name}</Label>
-        <Select
-          value={cfg.is_preset ? cfg.value : '__custom__'}
-          onChange={e => {
-            const v = e.target.value
-            if (v === '__custom__') update({ value: '', is_preset: false })
-            else update({ value: v, is_preset: true })
-          }}
-        >
-          <option value="__custom__">— Fecha personalizada —</option>
-          {DATE_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </Select>
-        {!cfg.is_preset && (
-          isRangeType ? (
-            <div className="flex gap-2">
-              <Input type="date" placeholder="Inicio"
-                value={cfg.value?.start || ''}
-                onChange={e => update({ value: { ...cfg.value, start: e.target.value }, is_preset: false })} />
-              <Input type="date" placeholder="Fin"
-                value={cfg.value?.end || ''}
-                onChange={e => update({ value: { ...cfg.value, end: e.target.value }, is_preset: false })} />
-            </div>
-          ) : (
-            <Input type={type === 'datetime-local' ? 'datetime-local' : 'date'}
-              value={typeof cfg.value === 'string' ? cfg.value : ''}
-              onChange={e => update({ value: e.target.value, is_preset: false })} />
-          )
+
+        {/* Preset pills */}
+        <div className="flex flex-wrap gap-1">
+          {DATE_PRESETS.map(p => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => update({ value: p.value, is_preset: true })}
+              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                cfg.is_preset && cfg.value === p.value
+                  ? 'bg-violet-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-violet-100 hover:text-violet-700'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Free date input(s) — always visible */}
+        {isRangeType ? (
+          <div className="flex gap-2">
+            <Input
+              type={inputType}
+              placeholder="Inicio"
+              value={!cfg.is_preset ? (cfg.value?.start || '') : ''}
+              onChange={e => update({ value: { ...(cfg.value || {}), start: e.target.value }, is_preset: false })}
+            />
+            <Input
+              type={inputType}
+              placeholder="Fin"
+              value={!cfg.is_preset ? (cfg.value?.end || '') : ''}
+              onChange={e => update({ value: { ...(cfg.value || {}), end: e.target.value }, is_preset: false })}
+            />
+          </div>
+        ) : (
+          <Input
+            type={inputType}
+            value={!cfg.is_preset ? (typeof cfg.value === 'string' ? cfg.value : '') : ''}
+            onChange={e => update({ value: e.target.value, is_preset: false })}
+          />
+        )}
+
+        {cfg.is_preset && (
+          <p className="text-xs text-violet-600 font-medium">
+            Preset activo: {DATE_PRESETS.find(p => p.value === cfg.value)?.label}
+            {' · '}
+            <button type="button" className="underline" onClick={() => update({ value: isRangeType ? {} : '', is_preset: false })}>
+              usar fecha libre
+            </button>
+          </p>
         )}
       </div>
     )
@@ -152,10 +295,12 @@ function ParamField({ param, value, onChange }) {
     return (
       <div className="space-y-1.5">
         <Label>{title || name}</Label>
-        <Select value={cfg.value} onChange={e => update({ value: e.target.value, is_preset: false })}>
-          <option value="">Selecciona...</option>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </Select>
+        <SearchableSelect
+          value={cfg.value}
+          onChange={v => update({ value: v, is_preset: false })}
+          options={options}
+          loading={false}
+        />
       </div>
     )
   }
@@ -267,12 +412,13 @@ export default function JobForm({ job, onSave, onCancel }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="jgroup">Grupo de destinatarios</Label>
-            <Select id="jgroup" value={form.group_id}
-              onChange={e => set('group_id', e.target.value)} required>
-              <option value="">Selecciona un grupo...</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </Select>
+            <Label>Grupo de destinatarios</Label>
+            <SearchableSelect
+              value={form.group_id}
+              onChange={v => set('group_id', v)}
+              options={groups.map(g => ({ label: g.name, value: g.id }))}
+              placeholder="Selecciona un grupo..."
+            />
           </div>
 
           <div className="flex flex-col justify-end pb-1">
