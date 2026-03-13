@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite DB
+backend/data/
+*.db
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build
+frontend/dist/
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.swp
+*.bak
+*.tmp
+
+# Ignore coverage and test artifacts
+coverage/
+*.coverage
+
+# Ignore LICENSE if you want to keep it private
+# LICENSE
