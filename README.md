@@ -43,51 +43,59 @@ Built with FastAPI + React. Fully Dockerized.
 
 ## Getting Started
 
-### Prerequisites
+### Option A — Pre-built image (recommended)
 
-- Docker
-- Docker Compose
+No need to install Node or Python. Just pull and run.
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/sefirosweb/Redash-Notification-Scheduler.git
-cd Redash-Notification-Scheduler
-```
-
-### 2. Configure environment variables
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your values:
+**1. Create your `.env`:**
 
 ```env
-# Redash
 REDASH_URL=https://your-redash-instance.com
 REDASH_API_KEY=your_redash_api_key
 
-# SMTP
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your@email.com
 SMTP_PASSWORD=your_password
 SMTP_FROM=noreply@yourcompany.com
 
-# Auth
 JWT_SECRET=change_this_to_a_random_secret_min32chars
 ```
 
-### 3. Start the application
+**2. Run with Docker Compose:**
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    image: ghcr.io/sefirosweb/redash-notification-scheduler:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+    volumes:
+      - sqlite_data:/app/data
+
+volumes:
+  sqlite_data:
+```
 
 ```bash
-docker-compose up -d --build
+docker compose up -d
+```
+
+Or directly with Docker:
+
+```bash
+docker run -d --name redash-scheduler \
+  --env-file .env \
+  -p 80:80 \
+  -v redash-data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/sefirosweb/redash-notification-scheduler:latest
 ```
 
 The app will be available at [http://localhost](http://localhost).
-
-### 4. Default credentials
 
 On first startup, an admin user is created automatically:
 
@@ -96,6 +104,20 @@ On first startup, an admin user is created automatically:
 | `admin`  | `admin`  |
 
 **Change the password after first login.**
+
+---
+
+### Option B — Build from source (development)
+
+```bash
+git clone https://github.com/sefirosweb/Redash-Notification-Scheduler.git
+cd Redash-Notification-Scheduler
+cp .env.example .env
+# Edit .env with your values
+docker compose up -d --build
+```
+
+The development `docker-compose.yml` builds frontend and backend separately and mounts the backend source for hot-reload.
 
 ---
 
