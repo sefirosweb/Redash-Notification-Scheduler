@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import client from '../api/client'
+import client, { errorMessage } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -70,14 +70,14 @@ export default function Users() {
     e.preventDefault()
     client.post('/users/', createForm)
       .then(() => { setShowCreate(false); setCreateForm(EMPTY); loadUsers(); toast.success('Usuario creado') })
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => toast.error(errorMessage(err)))
   }
 
   function handleUpdate(e, userId) {
     e.preventDefault()
     client.put(`/users/${userId}`, editForm)
       .then(() => { setEditingId(null); setEditForm({}); loadUsers(); toast.success('Usuario actualizado') })
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => toast.error(errorMessage(err)))
   }
 
   function handleDelete(user) {
@@ -89,7 +89,7 @@ export default function Users() {
     setConfirmUser(null)
     client.delete(`/users/${user.id}`)
       .then(() => { loadUsers(); toast.success(`Usuario "${user.username}" eliminado`) })
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => toast.error(errorMessage(err)))
   }
 
   function openEdit(user) {

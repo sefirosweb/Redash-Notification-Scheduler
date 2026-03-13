@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
-import client from '../api/client'
+import client, { errorMessage } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -111,7 +111,7 @@ export default function ApiTokens() {
         setRevealToken(res.data.token)
         toast.success('Token creado')
       })
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => toast.error(errorMessage(err)))
   }
 
   function confirmRevoke() {
@@ -119,7 +119,7 @@ export default function ApiTokens() {
     setConfirmToken(null)
     client.delete(`/api-tokens/${t.id}`)
       .then(() => { loadTokens(); toast.success(`Token "${t.name}" revocado`) })
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => toast.error(errorMessage(err)))
   }
 
   return (

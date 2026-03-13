@@ -104,9 +104,10 @@ function QueryPicker({ value, onChange }) {
 /**
  * Searchable dropdown.
  * options: array of strings OR { label, value } objects.
- * value: the currently selected value (string or id).
+ * value: selected value (string/id) in single mode, array in multiple mode.
+ * multiple: if true, allows selecting multiple values (stored as array).
  */
-function SearchableSelect({ value, onChange, options, loading, placeholder = 'Selecciona...' }) {
+function SearchableSelect({ value, onChange, options, loading, placeholder = 'Selecciona...', multiple = false }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -128,13 +129,48 @@ function SearchableSelect({ value, onChange, options, loading, placeholder = 'Se
     o.label.toLowerCase().includes(search.toLowerCase())
   )
 
-  const selectedLabel = normalised.find(o => String(o.value) === String(value))?.label
+  // --- single mode ---
+  const selectedLabel = !multiple
+    ? normalised.find(o => String(o.value) === String(value))?.label
+    : null
+
+  // --- multiple mode ---
+  const selectedArr = multiple ? (Array.isArray(value) ? value : (value ? [value] : [])) : []
+  const selectedStrSet = new Set(selectedArr.map(String))
+
+  function displayText() {
+    if (loading) return 'Cargando opciones...'
+    if (multiple) {
+      if (selectedArr.length === 0) return placeholder
+      if (selectedArr.length === 1)
+        return normalised.find(o => String(o.value) === String(selectedArr[0]))?.label || String(selectedArr[0])
+      return `${selectedArr.length} seleccionados`
+    }
+    return selectedLabel || placeholder
+  }
 
   function select(opt) {
-    onChange(opt.value)
-    setOpen(false)
-    setSearch('')
+    if (multiple) {
+      const strVal = String(opt.value)
+      if (selectedStrSet.has(strVal)) {
+        onChange(selectedArr.filter(v => String(v) !== strVal))
+      } else {
+        onChange([...selectedArr, opt.value])
+      }
+      // keep dropdown open for multi
+    } else {
+      onChange(opt.value)
+      setOpen(false)
+      setSearch('')
+    }
   }
+
+  function clearAll() {
+    onChange(multiple ? [] : '')
+    if (!multiple) { setOpen(false); setSearch('') }
+  }
+
+  const hasValue = multiple ? selectedArr.length > 0 : (value !== '' && value !== null && value !== undefined)
 
   return (
     <div ref={ref} className="relative">
@@ -144,8 +180,8 @@ function SearchableSelect({ value, onChange, options, loading, placeholder = 'Se
         disabled={loading}
         className="w-full flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
       >
-        <span className={selectedLabel ? 'text-slate-900' : 'text-slate-400'}>
-          {loading ? 'Cargando opciones...' : (selectedLabel || placeholder)}
+        <span className={hasValue && !loading ? 'text-slate-900' : 'text-slate-400'}>
+          {displayText()}
         </span>
         <span className="text-slate-400">▾</span>
       </button>
@@ -163,23 +199,44 @@ function SearchableSelect({ value, onChange, options, loading, placeholder = 'Se
           </div>
           <ul className="max-h-56 overflow-auto py-1">
             {filtered.length === 0 && <li className="px-3 py-2 text-xs text-slate-400">Sin resultados</li>}
-            {value !== '' && value !== null && value !== undefined && (
+            {hasValue && (
               <li
-                onClick={() => { onChange(''); setOpen(false); setSearch('') }}
+                onClick={clearAll}
                 className="px-3 py-2 text-xs text-slate-400 cursor-pointer hover:bg-slate-50 italic"
               >
                 — Limpiar selección —
               </li>
             )}
-            {filtered.map(o => (
-              <li key={o.value}
-                onClick={() => select(o)}
-                className={`px-3 py-2 text-sm cursor-pointer hover:bg-violet-50 hover:text-violet-700 ${String(o.value) === String(value) ? 'bg-violet-50 text-violet-700 font-medium' : ''}`}
-              >
-                {o.label}
-              </li>
-            ))}
+            {filtered.map(o => {
+              const isSelected = multiple
+                ? selectedStrSet.has(String(o.value))
+                : String(o.value) === String(value)
+              return (
+                <li key={o.value}
+                  onClick={() => select(o)}
+                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-violet-50 hover:text-violet-700 flex items-center gap-2 ${isSelected ? 'bg-violet-50 text-violet-700 font-medium' : ''}`}
+                >
+                  {multiple && (
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 text-xs ${isSelected ? 'bg-violet-600 border-violet-600 text-white' : 'border-slate-300'}`}>
+                      {isSelected ? '✓' : ''}
+                    </span>
+                  )}
+                  {o.label}
+                </li>
+              )
+            })}
           </ul>
+          {multiple && (
+            <div className="px-3 py-2 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setOpen(false); setSearch('') }}
+                className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -189,26 +246,39 @@ function SearchableSelect({ value, onChange, options, loading, placeholder = 'Se
 function QueryDropdownField({ param, cfg, update }) {
   const [options, setOptions] = useState([])
   const [loading, setLoading] = useState(true)
+  const isMulti = !!param.multiValuesOptions
 
   useEffect(() => {
     if (!param.queryId) { setLoading(false); return }
     client.get(`/redash/queries/${param.queryId}/results`)
       .then(res => {
         const rows = res.data || []
-        setOptions(rows.map(row => Object.values(row)[0]).filter(v => v != null).map(String))
+        if (rows.length > 0 && 'value' in rows[0]) {
+          // source query has explicit label/value columns
+          const labelKey = Object.keys(rows[0]).find(k => k !== 'value' && k !== 'sort') || Object.keys(rows[0])[0]
+          setOptions(rows.map(row => ({ label: String(row[labelKey]), value: String(row.value) })).filter(o => o.label))
+        } else {
+          setOptions(rows.map(row => Object.values(row)[0]).filter(v => v != null).map(String))
+        }
       })
       .catch(() => setOptions([]))
       .finally(() => setLoading(false))
   }, [param.queryId])
 
+  // Normalise stored value: multi expects array, single expects string
+  const normValue = isMulti
+    ? (Array.isArray(cfg.value) ? cfg.value : (cfg.value ? [cfg.value] : []))
+    : (Array.isArray(cfg.value) ? (cfg.value[0] ?? '') : (cfg.value ?? ''))
+
   return (
     <div className="space-y-1.5">
       <Label>{param.title || param.name}</Label>
       <SearchableSelect
-        value={cfg.value}
+        value={normValue}
         onChange={v => update({ value: v, is_preset: false })}
         options={options}
         loading={loading}
+        multiple={isMulti}
       />
     </div>
   )
@@ -226,11 +296,13 @@ function ParamField({ param, value, onChange }) {
     return <QueryDropdownField param={param} cfg={cfg} update={update} />
   }
 
-  const isDateType = type === 'date' || type === 'datetime-local'
-  const isRangeType = type === 'date-range' || type === 'datetime-range'
+  const isDateType  = type === 'date' || type === 'datetime-local' || type === 'datetime-with-seconds'
+  const isRangeType = type === 'date-range' || type === 'datetime-range' || type === 'datetime-range-with-seconds'
 
   if (isDateType || isRangeType) {
-    const inputType = (type === 'datetime-local' || type === 'datetime-range') ? 'datetime-local' : 'date'
+    const inputType = ['datetime-local', 'datetime-range', 'datetime-with-seconds', 'datetime-range-with-seconds'].includes(type)
+      ? 'datetime-local'
+      : 'date'
     return (
       <div className="space-y-1.5">
         <Label>{title || name}</Label>
@@ -292,14 +364,19 @@ function ParamField({ param, value, onChange }) {
 
   if (type === 'enum') {
     const options = (enumOptions || '').split('\n').filter(Boolean)
+    const isMulti = !!param.multiValuesOptions
+    const normValue = isMulti
+      ? (Array.isArray(cfg.value) ? cfg.value : (cfg.value ? [cfg.value] : []))
+      : (Array.isArray(cfg.value) ? (cfg.value[0] ?? '') : (cfg.value ?? ''))
     return (
       <div className="space-y-1.5">
         <Label>{title || name}</Label>
         <SearchableSelect
-          value={cfg.value}
+          value={normValue}
           onChange={v => update({ value: v, is_preset: false })}
           options={options}
           loading={false}
+          multiple={isMulti}
         />
       </div>
     )

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import client from '../api/client'
+import client, { errorMessage } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -65,7 +65,7 @@ export default function Groups() {
     e.preventDefault()
     const req = editing ? client.put(`/groups/${editing.id}`, form) : client.post('/groups/', form)
     req.then(() => { setShowForm(false); setEditing(null); loadGroups(); toast.success(editing ? 'Grupo actualizado' : 'Grupo creado') })
-       .catch(err => toast.error(err.response?.data?.detail || err.message))
+       .catch(err => toast.error(errorMessage(err)))
   }
   function handleDelete(g) {
     setConfirmGroup(g)

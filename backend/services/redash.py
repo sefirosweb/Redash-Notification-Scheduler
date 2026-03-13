@@ -25,14 +25,25 @@ class RedashClient:
 	def execute_query(self, query_id: int, parameters: dict = None, max_age: int = 0) -> Dict[str, Any]:
 		body = {"max_age": max_age}
 		if parameters:
-			body["parameters"] = parameters
+			# Drop params with empty/None values so Redash uses its own defaults
+			clean = {k: v for k, v in parameters.items() if v is not None and v != '' and v != {} and v != []}
+			if clean:
+				body["parameters"] = clean
 		resp = requests.post(
 			f"{self.base_url}/api/queries/{query_id}/results",
 			headers=self.headers,
 			json=body
 		)
-		resp.raise_for_status()
-		return resp.json()["job"]
+		if not resp.ok:
+			try:
+				detail = resp.json()
+			except Exception:
+				detail = resp.text
+			raise Exception(f"Redash {resp.status_code}: {detail}")
+		data = resp.json()
+		if "job" not in data:
+			raise Exception(f"Respuesta inesperada de Redash: {data}")
+		return data["job"]
 
 	def poll_job(self, job_id: str, poll_interval: float = 1.0, timeout: int = 60) -> Dict[str, Any]:
 		start = time.time()

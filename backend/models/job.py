@@ -26,7 +26,7 @@ class Job(Base):
     group       = relationship("Group", back_populates="jobs")
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    logs        = relationship("EmailLog", back_populates="job")
+    logs        = relationship("EmailLog", back_populates="job", cascade="all, delete-orphan")
 
 
 class EmailLog(Base):

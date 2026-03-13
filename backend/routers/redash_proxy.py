@@ -84,6 +84,9 @@ def _fetch_query_options(c: RedashClient, source_query_id: int) -> list:
             job = c.poll_job(data["job"]["id"])
             result = c.get_query_result(job["query_result_id"])
             rows = result["data"]["rows"]
+        if rows and "value" in rows[0]:
+            # source query has explicit label/value columns — return value column
+            return [{"label": str(list(row.values())[0]), "value": str(row["value"])} for row in rows if row]
         return [str(list(row.values())[0]) for row in rows if row]
     except Exception:
         return []
@@ -99,14 +102,16 @@ def _expected_params(c: RedashClient, query_id: int) -> list:
             ptype = p.get("type", "text")
             entry = {"name": p["name"], "type": ptype}
 
-            if ptype in ("date-range", "datetime-range"):
-                entry["hint"] = '{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}'
-            elif ptype in ("date", "datetime-local"):
-                entry["hint"] = "YYYY-MM-DD"
+            if ptype in ("date-range", "datetime-range", "datetime-range-with-seconds"):
+                entry["hint"] = '{"start": "YYYY-MM-DD HH:MM:SS", "end": "YYYY-MM-DD HH:MM:SS"}'
+            elif ptype in ("date", "datetime-local", "datetime-with-seconds"):
+                entry["hint"] = "YYYY-MM-DD HH:MM:SS"
             elif ptype == "enum":
                 entry["allowed_values"] = [
                     v for v in (p.get("enumOptions") or "").split("\n") if v
                 ]
+                if p.get("multiValuesOptions"):
+                    entry["multi_value"] = True
             elif ptype == "query" and p.get("queryId"):
                 values = _fetch_query_options(c, p["queryId"])
                 if values:

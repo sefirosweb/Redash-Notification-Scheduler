@@ -60,6 +60,8 @@ SMTP_PASSWORD=your_password
 SMTP_FROM=noreply@yourcompany.com
 
 JWT_SECRET=change_this_to_a_random_secret_min32chars
+
+TIMEZONE=Europe/Madrid
 ```
 
 **2. Run with Docker Compose:**

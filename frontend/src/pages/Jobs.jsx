@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Plus, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import cronstrue from 'cronstrue'
-import client from '../api/client'
+import client, { errorMessage } from '../api/client'
 import JobForm from '../components/JobForm'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -60,7 +60,7 @@ export default function Jobs() {
   function handleSave(form) {
     const req = editing ? client.put(`/jobs/${editing.id}`, form) : client.post('/jobs/', form)
     req.then(() => { setShowForm(false); setEditing(null); loadJobs(); toast.success(editing ? 'Job actualizado' : 'Job creado') })
-       .catch(err => toast.error(err.response?.data?.detail || err.message))
+       .catch(err => toast.error(errorMessage(err)))
   }
   function handleDelete(job) {
     setConfirmJob(job)
@@ -71,12 +71,12 @@ export default function Jobs() {
     setConfirmJob(null)
     client.delete(`/jobs/${job.id}`)
       .then(() => { loadJobs(); toast.success(`Job "${job.name}" eliminado`) })
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => toast.error(errorMessage(err)))
   }
   function handleRun(job) {
     client.post(`/jobs/${job.id}/run`)
       .then(() => toast.success(`"${job.name}" lanzado en segundo plano`))
-      .catch(err => toast.error(err.response?.data?.detail || err.message))
+      .catch(err => toast.error(errorMessage(err)))
   }
 
   return (

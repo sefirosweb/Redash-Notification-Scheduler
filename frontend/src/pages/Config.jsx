@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
-import client from '../api/client'
+import client, { errorMessage } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -36,7 +36,7 @@ export default function Config() {
     setSaving(true)
     client.put('/config/', form)
       .then(res => { setConfig(res.data); setEditing(false); setForm(null); setSaving(false); toast.success('Configuración guardada') })
-      .catch(err => { toast.error(err.response?.data?.detail || err.message); setSaving(false) })
+      .catch(err => { toast.error(errorMessage(err)); setSaving(false) })
   }
 
   if (loading) return <div className="text-slate-400 text-sm">Cargando configuración...</div>
