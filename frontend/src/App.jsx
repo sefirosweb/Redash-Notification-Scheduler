@@ -58,7 +58,16 @@ function Sidebar() {
         ))}
       </nav>
 
-      <div className="p-3 border-t border-slate-200">
+      <div className="p-3 border-t border-slate-200 space-y-1">
+        <a
+          href="https://github.com/sefirosweb/Redash-Notification-Scheduler"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-400 hover:text-violet-600 transition-colors"
+        >
+          <Mail className="w-3 h-3 shrink-0" />
+          by sefirosweb
+        </a>
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
