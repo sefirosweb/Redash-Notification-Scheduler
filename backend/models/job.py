@@ -20,6 +20,7 @@ class Job(Base):
     cron_expr   = Column(String, nullable=False)   # e.g. "0 8 * * 1"
     format      = Column(String, nullable=False)   # html | pdf | excel
     body        = Column(Text, nullable=True)      # intro text before table
+    parameters  = Column(Text, nullable=True)      # JSON: {param_name: {type, value, is_preset}}
     active      = Column(Boolean, default=True)
     group_id    = Column(Integer, ForeignKey("groups.id"), nullable=False)
     group       = relationship("Group", back_populates="jobs")

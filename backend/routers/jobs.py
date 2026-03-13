@@ -13,6 +13,7 @@ class JobCreate(BaseModel):
     cron_expr: str
     format: str
     body: Optional[str] = None
+    parameters: Optional[str] = None
     active: bool = True
     group_id: int
 
@@ -27,6 +28,7 @@ class JobUpdate(BaseModel):
     cron_expr: str = None
     format: str = None
     body: Optional[str] = None
+    parameters: Optional[str] = None
     active: bool = None
     group_id: int = None
 

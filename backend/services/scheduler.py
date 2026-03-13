@@ -13,6 +13,45 @@ _tz = pytz.timezone(os.getenv("TIMEZONE", "Europe/Madrid"))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 scheduler = BackgroundScheduler(timezone=_tz)
 
+def resolve_parameters(parameters_json):
+    if not parameters_json:
+        return None
+    import json
+    from datetime import date, timedelta
+    today = date.today()
+    fom = today.replace(day=1)
+    lme = fom - timedelta(days=1)
+    lms = lme.replace(day=1)
+    PRESETS = {
+        'today':        (today, today),
+        'yesterday':    (today - timedelta(1), today - timedelta(1)),
+        'last_7_days':  (today - timedelta(7), today),
+        'last_30_days': (today - timedelta(30), today),
+        'last_90_days': (today - timedelta(90), today),
+        'this_month':   (fom, today),
+        'last_month':   (lms, lme),
+        'this_year':    (today.replace(month=1, day=1), today),
+    }
+    try:
+        params = json.loads(parameters_json)
+    except Exception:
+        return None
+    resolved = {}
+    for key, cfg in params.items():
+        ptype = cfg.get('type', 'text')
+        value = cfg.get('value', '')
+        is_preset = cfg.get('is_preset', False)
+        if is_preset and value in PRESETS:
+            start, end = PRESETS[value]
+            if ptype in ('date-range', 'datetime-range'):
+                resolved[key] = {'start': start.isoformat(), 'end': end.isoformat()}
+            else:
+                resolved[key] = end.isoformat()
+        else:
+            resolved[key] = value
+    return resolved if resolved else None
+
+
 def job_runner(job_id):
     print(f"[job_runner] Iniciando job_id={job_id}", flush=True)
     db = SessionLocal()
@@ -47,7 +86,8 @@ def job_runner(job_id):
         redash = RedashClient(redash_url, redash_api_key)
         mailer = Mailer(smtp_server, smtp_port, smtp_username, smtp_password, smtp_from)
         try:
-            job_exec = redash.execute_query(job.query_id)
+            resolved_params = resolve_parameters(job.parameters)
+            job_exec = redash.execute_query(job.query_id, parameters=resolved_params)
             print(f"[job_runner] Query lanzada, job redash id={job_exec['id']}", flush=True)
             job_poll = redash.poll_job(job_exec['id'])
             result = redash.get_query_result(job_poll['query_result_id'])

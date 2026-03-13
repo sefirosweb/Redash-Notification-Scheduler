@@ -8,21 +8,28 @@ class RedashClient:
 		self.api_key = api_key
 		self.headers = {"Authorization": f"Key {self.api_key}"}
 
-	def list_queries(self) -> List[Dict[str, Any]]:
-		resp = requests.get(f"{self.base_url}/api/queries", headers=self.headers)
+	def list_queries(self, search: str = "", page_size: int = 100) -> List[Dict[str, Any]]:
+		params = {"page_size": page_size}
+		if search:
+			params["q"] = search
+		resp = requests.get(f"{self.base_url}/api/queries", headers=self.headers, params=params)
 		resp.raise_for_status()
-		return resp.json()["results"]
+		data = resp.json()
+		return data.get("results", []) if isinstance(data, dict) else data
 
 	def get_query(self, query_id: int) -> Dict[str, Any]:
 		resp = requests.get(f"{self.base_url}/api/queries/{query_id}", headers=self.headers)
 		resp.raise_for_status()
 		return resp.json()
 
-	def execute_query(self, query_id: int, max_age: int = 0) -> Dict[str, Any]:
+	def execute_query(self, query_id: int, parameters: dict = None, max_age: int = 0) -> Dict[str, Any]:
+		body = {"max_age": max_age}
+		if parameters:
+			body["parameters"] = parameters
 		resp = requests.post(
 			f"{self.base_url}/api/queries/{query_id}/results",
 			headers=self.headers,
-			json={"max_age": max_age}
+			json=body
 		)
 		resp.raise_for_status()
 		return resp.json()["job"]

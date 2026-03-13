@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine, SessionLocal
-from routers import jobs, groups, config, auth, logs, users
+from routers import jobs, groups, config, auth, logs, users, redash_proxy
 from services.scheduler import start_scheduler
 
 Base.metadata.create_all(bind=engine)
@@ -12,6 +12,7 @@ def _run_migrations():
         from sqlalchemy import text
         migrations = [
             "ALTER TABLE jobs ADD COLUMN body TEXT",
+            "ALTER TABLE jobs ADD COLUMN parameters TEXT",
         ]
         for sql in migrations:
             try:
@@ -38,6 +39,7 @@ app.include_router(jobs.router,   prefix="/api/jobs",   tags=["jobs"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
 app.include_router(config.router, prefix="/api/config", tags=["config"])
 app.include_router(logs.router,   prefix="/api/logs",   tags=["logs"])
+app.include_router(redash_proxy.router, prefix="/api/redash", tags=["redash"])
 
 @app.on_event("startup")
 def startup():
