@@ -13,6 +13,24 @@ _tz = pytz.timezone(os.getenv("TIMEZONE", "Europe/Madrid"))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 scheduler = BackgroundScheduler(timezone=_tz)
 
+def warm_query_type_params(parameters_json, redash: "RedashClient"):
+    """Pre-warm Redash cache for source queries of query-type parameters.
+    This ensures validation succeeds when the main query runs with max_age=0."""
+    import json
+    try:
+        params = json.loads(parameters_json) if parameters_json else {}
+    except Exception:
+        return
+    for cfg in params.values():
+        if cfg.get('type') == 'query' and cfg.get('queryId'):
+            try:
+                job_exec = redash.execute_query(int(cfg['queryId']), max_age=86400)
+                if not job_exec.get('_cached'):
+                    redash.poll_job(job_exec['id'])
+            except Exception:
+                pass  # best-effort — don't block the main execution
+
+
 def resolve_parameters(parameters_json):
     if not parameters_json:
         return None
@@ -101,12 +119,18 @@ def job_runner(job_id):
         redash = RedashClient(redash_url, redash_api_key)
         mailer = Mailer(smtp_server, smtp_port, smtp_username, smtp_password, smtp_from)
         try:
+            warm_query_type_params(job.parameters, redash)
             resolved_params = resolve_parameters(job.parameters)
             print(f"[job_runner] Parámetros resueltos: {resolved_params}", flush=True)
-            job_exec = redash.execute_query(job.query_id, parameters=resolved_params, max_age=3600)
-            print(f"[job_runner] Query lanzada, job redash id={job_exec['id']}", flush=True)
-            job_poll = redash.poll_job(job_exec['id'])
-            result = redash.get_query_result(job_poll['query_result_id'])
+            job_exec = redash.execute_query(job.query_id, parameters=resolved_params, max_age=0)
+            if job_exec.get("_cached"):
+                print(f"[job_runner] Resultado en caché, query_result_id={job_exec['query_result_id']}", flush=True)
+                query_result_id = job_exec['query_result_id']
+            else:
+                print(f"[job_runner] Query lanzada, job redash id={job_exec['id']}", flush=True)
+                job_poll = redash.poll_job(job_exec['id'])
+                query_result_id = job_poll['query_result_id']
+            result = redash.get_query_result(query_result_id)
             rows = result['data']['rows']
             columns = result['data']['columns']
             print(f"[job_runner] Resultado obtenido: {len(rows)} filas", flush=True)

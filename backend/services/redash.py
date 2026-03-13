@@ -41,6 +41,8 @@ class RedashClient:
 				detail = resp.text
 			raise Exception(f"Redash {resp.status_code}: {detail}")
 		data = resp.json()
+		if "query_result" in data:
+			return {"status": 3, "query_result_id": data["query_result"]["id"], "_cached": True}
 		if "job" not in data:
 			raise Exception(f"Respuesta inesperada de Redash: {data}")
 		return data["job"]

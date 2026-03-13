@@ -10,6 +10,14 @@ Built with FastAPI + React. Fully Dockerized.
 
 ---
 
+## Screenshots
+
+| Jobs editor | API Tokens | Recipient groups |
+|-------------|------------|-----------------|
+| ![Jobs editor](docs/screenshots/image-1.png) | ![API Tokens](docs/screenshots/image-2.png) | ![Groups](docs/screenshots/image-3.png) |
+
+---
+
 ## Features
 
 - **Scheduled jobs** — define cron expressions to send reports automatically
