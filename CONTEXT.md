@@ -41,13 +41,31 @@ Herramienta interna para programar el envío automático de reportes por email a
 
 ### Usuarios
 - Listado, creación, edición y eliminación
-- Campos: username, password, is_admin, is_active
-- Primer usuario admin creado automáticamente (admin/admin) al arrancar si no hay ninguno
+- Campos: username, password, is_active
+- Primer usuario creado automáticamente (admin/admin) al arrancar si no hay ninguno
 
 ### Autenticación
 - Login con usuario y contraseña → JWT en localStorage
 - Rutas protegidas en frontend
 - Middleware de autorización en backend
+
+### API Tokens
+- Gestión de tokens para acceso externo desde sistemas de terceros (ERP, scripts, etc.)
+- Cada token tiene: nombre, creador, fecha de expiración opcional (null = indefinido)
+- El token raw (`rns_` + 32 hex) se muestra solo una vez al crear; en BD se guarda el hash SHA-256
+- Endpoints protegidos por JWT (gestión) o por API token (ejecución de queries)
+
+### API de ejecución en tiempo real
+- `POST /api/redash/queries/{query_id}/execute`
+- Requiere cabecera `Authorization: Bearer rns_...` (API token)
+- Fuerza ejecución fresca en Redash (`max_age=0` por defecto), espera el resultado y devuelve las filas
+- Soporta `max_age` configurable (en segundos) para permitir caché si se desea
+- Parámetros en formato simplificado, pasados directamente a Redash:
+  - Valor simple: `"param": "valor"`
+  - Rango de fechas: `"param": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`
+- En caso de error de parámetros (400), la respuesta incluye:
+  - `redash_error`: mensaje original de Redash
+  - `expected_parameters`: lista de parámetros con sus tipos y valores permitidos (para parámetros de tipo `query`, incluye los valores disponibles obtenidos en tiempo real)
 
 ### Email
 - Formato HTML: tabla inline en el body
@@ -97,6 +115,7 @@ Tablas:
 - `groups` — grupos de destinatarios
 - `jobs` — jobs programados
 - `email_logs` — historial de ejecuciones
+- `api_tokens` — tokens de acceso externo (hash SHA-256, expiración opcional)
 - `global_config` — tabla legacy (no se usa, config viene del .env)
 
 ### Migraciones
@@ -124,18 +143,21 @@ backend/
 ├── database.py              # SQLAlchemy engine + SessionLocal
 ├── models/
 │   ├── job.py               # Job, Group, EmailLog, GlobalConfig
-│   └── user.py              # User
+│   ├── user.py              # User
+│   └── api_token.py         # ApiToken (tokens de acceso externo)
 ├── routers/
 │   ├── auth.py              # POST /login, get_current_user, require_admin
 │   ├── jobs.py              # CRUD jobs + POST /{id}/run
-│   ├── groups.py            # CRUD grupos
+│   ├── groups.py            # CRUD grupos (409 si tiene jobs asociados)
 │   ├── logs.py              # GET logs
 │   ├── users.py             # CRUD usuarios
-│   └── config.py            # GET/PUT config (legacy, no se usa en producción)
+│   ├── config.py            # GET/PUT config (legacy, no se usa en producción)
+│   ├── redash_proxy.py      # Proxy queries Redash + POST /execute (tiempo real)
+│   └── api_tokens.py        # CRUD tokens + dependency require_api_token
 └── services/
-    ├── scheduler.py         # APScheduler + job_runner
+    ├── scheduler.py         # APScheduler + job_runner + resolve_parameters
     ├── mailer.py            # Envío SMTP
-    ├── redash.py            # Cliente API Redash
+    ├── redash.py            # Cliente API Redash (execute_query, poll_job, etc.)
     └── formatters.py        # rows_to_html / rows_to_pdf / rows_to_excel
 
 frontend/src/
@@ -146,8 +168,9 @@ frontend/src/
 │   ├── Jobs.jsx
 │   ├── Groups.jsx
 │   ├── Logs.jsx
-│   └── Users.jsx
+│   ├── Users.jsx
+│   └── ApiTokens.jsx        # Gestión de tokens + guía de uso del endpoint
 └── components/
-    ├── JobForm.jsx
+    ├── JobForm.jsx           # SearchableSelect, QueryPicker, parámetros dinámicos
     └── ui/                  # button, input, label, select, badge, card, table
 ```

@@ -16,10 +16,13 @@ Built with FastAPI + React. Fully Dockerized.
 - **Force run** — trigger any job immediately without waiting for the schedule
 - **Multiple formats** — send reports as inline HTML, PDF attachment, or Excel attachment
 - **Recipient groups** — manage lists of email addresses and assign them to jobs
+- **Dynamic parameters** — supports all Redash parameter types (`text`, `number`, `date`, `date-range`, `enum`, `query`)
 - **Intro text** — add a custom description before each report in the email body
 - **Execution history** — view logs of every sent email with status and error details
-- **User management** — create and manage users with admin roles
+- **User management** — create and manage users with active/inactive status
 - **Authentication** — JWT-based login, protected routes
+- **API Tokens** — long-lived tokens for external system integration
+- **Real-time query API** — execute any Redash query on demand and get fresh data instantly
 
 ---
 
@@ -129,24 +132,91 @@ ana@company.com, luis@company.com, team@company.com
 
 ---
 
+## Real-time Query API
+
+Execute Redash queries on demand from any external system (ERP, scripts, dashboards) and get fresh data without waiting for the scheduler.
+
+### 1. Create an API Token
+
+In the web UI → **API Tokens** → **Crear Token**.
+Give it a name and an optional expiry date. The raw token (`rns_...`) is shown **only once** — copy it immediately.
+
+### 2. Execute a query
+
+```bash
+curl -X POST https://your-server/api/redash/queries/{query_id}/execute \
+  -H "Authorization: Bearer rns_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_age": 0,
+    "parameters": {
+      "fecha":     { "start": "2025-01-01", "end": "2025-03-31" },
+      "proveedor": "Acme S.A."
+    }
+  }'
+```
+
+| Field | Description |
+|-------|-------------|
+| `max_age` | Cache in seconds. `0` = always fresh (default). Use a higher value to allow Redash to return cached results. |
+| `parameters` | Optional. Simple value: `"param": "value"`. Date range: `"param": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`. |
+
+**Success (200):** array of row objects.
+
+**Parameter error (400):** includes `redash_error` (Redash's own message) and `expected_parameters` with each parameter's type, format hint, and — for `query`-type parameters — the list of valid values fetched live:
+
+```json
+{
+  "detail": {
+    "redash_error": { "message": "The following parameter values are incompatible: proveedor" },
+    "expected_parameters": [
+      { "name": "fecha",     "type": "date-range", "hint": "{\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\"}" },
+      { "name": "proveedor", "type": "query",       "allowed_values": ["Acme S.A.", "Proveedor B", "..."] }
+    ]
+  }
+}
+```
+
+### Token management endpoints
+
+All require a valid JWT login token.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`    | `/api/api-tokens/`     | List all tokens |
+| `POST`   | `/api/api-tokens/`     | Create a token (`{"name": "...", "expires_at": "..."}`) |
+| `DELETE` | `/api/api-tokens/{id}` | Revoke a token |
+
+---
+
 ## Project Structure
 
 ```
 .
 ├── backend/
-│   ├── main.py              # FastAPI app entry point
+│   ├── main.py              # FastAPI app entry point, migrations, scheduler start
 │   ├── database.py          # SQLAlchemy setup
-│   ├── models/              # ORM models (Job, Group, EmailLog, User)
-│   ├── routers/             # API endpoints
+│   ├── models/
+│   │   ├── job.py           # Job, Group, EmailLog
+│   │   ├── user.py          # User
+│   │   └── api_token.py     # ApiToken (external access tokens)
+│   ├── routers/
+│   │   ├── auth.py          # Login + JWT middleware
+│   │   ├── jobs.py          # CRUD jobs + force run
+│   │   ├── groups.py        # CRUD recipient groups
+│   │   ├── users.py         # CRUD users
+│   │   ├── logs.py          # Execution history
+│   │   ├── redash_proxy.py  # Redash query proxy + real-time execute endpoint
+│   │   └── api_tokens.py    # API token CRUD + auth dependency
 │   └── services/
-│       ├── scheduler.py     # APScheduler + job runner
+│       ├── scheduler.py     # APScheduler + job runner + parameter resolver
 │       ├── mailer.py        # SMTP email sender
 │       ├── redash.py        # Redash API client
 │       └── formatters.py    # HTML / PDF / Excel generators
 ├── frontend/
 │   └── src/
-│       ├── pages/           # Jobs, Groups, Logs, Users, Login
-│       └── components/      # JobForm, shadcn-style UI components
+│       ├── pages/           # Jobs, Groups, Logs, Users, ApiTokens, Login
+│       └── components/      # JobForm (with searchable dropdowns), UI components
 ├── nginx/
 │   └── nginx.conf           # Reverse proxy config
 ├── docker-compose.yml

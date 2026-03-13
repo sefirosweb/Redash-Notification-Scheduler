@@ -1,18 +1,20 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
-import { CalendarClock, Users, History, Mail, UserCog, LogOut } from 'lucide-react'
+import { CalendarClock, Users, History, Mail, UserCog, LogOut, KeyRound } from 'lucide-react'
 import { Toaster } from 'sonner'
 import { cn } from './lib/utils'
 import Jobs from './pages/Jobs'
 import Groups from './pages/Groups'
 import Logs from './pages/Logs'
 import UsersPage from './pages/Users'
+import ApiTokens from './pages/ApiTokens'
 import Login from './pages/Login'
 
 const navItems = [
-  { to: '/jobs',   label: 'Jobs',      icon: CalendarClock },
-  { to: '/groups', label: 'Grupos',    icon: Users },
-  { to: '/logs',   label: 'Historial', icon: History },
-  { to: '/users',  label: 'Usuarios',  icon: UserCog },
+  { to: '/jobs',        label: 'Jobs',        icon: CalendarClock },
+  { to: '/groups',      label: 'Grupos',      icon: Users },
+  { to: '/logs',        label: 'Historial',   icon: History },
+  { to: '/users',       label: 'Usuarios',    icon: UserCog },
+  { to: '/api-tokens',  label: 'API Tokens',  icon: KeyRound },
 ]
 
 function ProtectedRoute({ children }) {
@@ -91,7 +93,8 @@ function Layout() {
             <Route path="/jobs"   element={<Jobs />} />
             <Route path="/groups" element={<Groups />} />
             <Route path="/logs"   element={<Logs />} />
-            <Route path="/users"  element={<UsersPage />} />
+            <Route path="/users"       element={<UsersPage />} />
+            <Route path="/api-tokens"  element={<ApiTokens />} />
           </Routes>
         </div>
       </main>
