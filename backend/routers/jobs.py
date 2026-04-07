@@ -32,6 +32,11 @@ class JobUpdate(BaseModel):
     active: bool = None
     group_id: int = None
 
+@router.get("/scheduler-status")
+def scheduler_status():
+    from services.scheduler import get_scheduler_status
+    return get_scheduler_status()
+
 @router.get("/", response_model=List[JobOut])
 def list_jobs(db: Session = Depends(get_db)):
     return db.query(Job).all()
@@ -49,6 +54,8 @@ def create_job(job: JobCreate, db: Session = Depends(get_db)):
     db.add(db_job)
     db.commit()
     db.refresh(db_job)
+    from services.scheduler import sync_job
+    sync_job(db_job.id)
     return db_job
 
 @router.put("/{job_id}", response_model=JobOut)
@@ -60,6 +67,8 @@ def update_job(job_id: int, job: JobUpdate, db: Session = Depends(get_db)):
         setattr(db_job, key, value)
     db.commit()
     db.refresh(db_job)
+    from services.scheduler import sync_job
+    sync_job(db_job.id)
     return db_job
 
 @router.post("/{job_id}/run")
@@ -77,6 +86,8 @@ def delete_job(job_id: int, db: Session = Depends(get_db)):
     db_job = db.query(Job).filter(Job.id == job_id).first()
     if not db_job:
         raise HTTPException(status_code=404, detail="Job not found")
+    from services.scheduler import remove_job
+    remove_job(db_job.id)
     db.delete(db_job)
     db.commit()
     return {"ok": True}

@@ -184,7 +184,52 @@ def start_scheduler():
             **parse_cron(job.cron_expr)
         )
     scheduler.start()
+    print(f"[scheduler] Iniciado con {len(jobs)} jobs activos", flush=True)
     db.close()
+
+
+def sync_job(job_id: int):
+    """Add, update, or remove a job from the live scheduler based on DB state."""
+    db = SessionLocal()
+    try:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        existing = scheduler.get_job(f"job_{job_id}")
+
+        if existing:
+            scheduler.remove_job(f"job_{job_id}")
+            print(f"[scheduler] Eliminado job_{job_id} del scheduler", flush=True)
+
+        if job and job.active:
+            scheduler.add_job(
+                job_runner,
+                'cron',
+                id=f"job_{job.id}",
+                args=[job.id],
+                **parse_cron(job.cron_expr)
+            )
+            next_run = scheduler.get_job(f"job_{job.id}").next_run_time
+            print(f"[scheduler] Programado job_{job.id} → próxima ejecución: {next_run}", flush=True)
+    finally:
+        db.close()
+
+
+def remove_job(job_id: int):
+    """Remove a job from the live scheduler (used on delete)."""
+    existing = scheduler.get_job(f"job_{job_id}")
+    if existing:
+        scheduler.remove_job(f"job_{job_id}")
+        print(f"[scheduler] Eliminado job_{job_id} del scheduler", flush=True)
+
+
+def get_scheduler_status():
+    """Return next run time for every scheduled job."""
+    result = {}
+    for job in scheduler.get_jobs():
+        result[job.id] = {
+            'next_run_time': job.next_run_time.isoformat() if job.next_run_time else None,
+        }
+    return result
+
 
 def parse_cron(cron_expr):
     # cron_expr: "0 8 * * 1" → dict for APScheduler

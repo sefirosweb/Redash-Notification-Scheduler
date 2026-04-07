@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Play } from 'lucide-react'
+import { Plus, Play, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import cronstrue from 'cronstrue'
 import client, { errorMessage } from '../api/client'
@@ -47,11 +47,19 @@ export default function Jobs() {
   const [editing, setEditing] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [confirmJob, setConfirmJob] = useState(null)
+  const [schedulerStatus, setSchedulerStatus] = useState({})
 
   function loadJobs() {
     setLoading(true)
-    client.get('/jobs/')
-      .then(res => { setJobs(res.data); setLoading(false) })
+    Promise.all([
+      client.get('/jobs/'),
+      client.get('/jobs/scheduler-status')
+    ])
+      .then(([jobsRes, statusRes]) => {
+        setJobs(jobsRes.data)
+        setSchedulerStatus(statusRes.data)
+        setLoading(false)
+      })
       .catch(err => { setError(err.message); setLoading(false) })
   }
 
@@ -134,6 +142,12 @@ export default function Jobs() {
                     <TableCell>
                       <span className="text-xs text-slate-600">{cronLabel(job.cron_expr)}</span>
                       <span className="block font-mono text-xs text-slate-400">{job.cron_expr}</span>
+                      {schedulerStatus[`job_${job.id}`]?.next_run_time && (
+                        <span className="flex items-center gap-1 mt-1 text-xs text-violet-600">
+                          <Clock className="w-3 h-3" />
+                          {new Date(schedulerStatus[`job_${job.id}`].next_run_time).toLocaleString()}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="uppercase">{job.format}</Badge>
